@@ -1,0 +1,389 @@
+#!/usr/bin/env python3
+import argparse
+import sys, os, subprocess, ntpath , yaml
+from distutils.dir_util import copy_tree
+import filecmp, shutil
+from pathlib import Path
+from collections import namedtuple
+import logging
+import filecmp
+from typing import Any
+
+# Create a custom logger
+#logger = logging.getLogger(__name__)
+#logger.setLevel(logging.DEBUG)
+#f_handler = None
+def get_args():
+    parser = argparse.ArgumentParser(epilog="%(prog)s version 1.0.0. use command -h for info.",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description='SUMMER: framework for long-reads analysis.',
+                                     add_help=True,)
+
+    parent_parser = argparse.ArgumentParser(add_help=True, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parent_parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0.0')
+
+    # Adding the main params for any commands
+    parent_parser.add_argument('-i', '--inputdir', dest="input", help='Input directory and file name, Fasta, Fastq, or gz files.', type=str, required=True)
+    parent_parser.add_argument('-s', '--samplefile', dest="sample", help='Input file name, Fasta, Fastq, gz ,or .bam, .vcf files.', type=str, required=True)
+    parent_parser.add_argument('-o', '--outdir', dest="outdir", help='Position of output directionary', type=str, required=True)
+    parent_parser.add_argument('-rd', '--refdir', dest="refdir", help='The position of the reference genome.', required=True)
+    parent_parser.add_argument('-r', '--ref', dest="ref", help='The reference file will be used to align reads to, filename. Hg38 is recommended.', required=True)
+    parent_parser.add_argument('-x', '--sex', dest="sex", choices=['male','female'], help='Biological sex of the sample, male or female.', required=True)
+    parent_parser.add_argument('-t', '--thread', dest="thread",type=int, help='Number of threads being used', default='6')
+    parent_parser.add_argument('--hpo', dest="hpo", type=str, action='append', help='One or several HPO standarized phenotypes of the sample, e.g., --hpo HP:0001250 --hpo HP:0031936')
+    parent_parser.add_argument('-c', '--Caller', dest="caller", choices=['cutesv', 'sniffles2','svim','combined'], help='In case if you want to choose specific caller otherwise default will be used.', default='sniffles')
+    parent_parser.add_argument('-g', '--log', dest='log_file', type=str, help='Log file: %(default)s', default='SUMMERLog.txt')
+    parent_parser.add_argument('--all', dest="all_mode", action='store_true', help="""This command will run the following:1.Align the reads.2.Report the quality of reads 3.Identify SNVs 4.Identify SVs 5.Annote SVs 6.Identity STRs 7.Identify Mobile Elements""")
+    parent_parser.add_argument('--align', dest="align_mode", action='store_true', help="""This command will align the reads using minimap2, then index and sort the bam using samtools""")
+    parent_parser.add_argument('--pandepth', dest="pandepth", action='store_true', help="""This command will evaluate sequencing quality based on bam files using pandepth""")
+    parent_parser.add_argument('--snv', dest="snv_detection_mode", action='store_true', help="""This command will detecte SNVs from bam files using clair3""")
+    parent_parser.add_argument('--sv', dest="sv_detection_mode", action='store_true', help="""This command will detecte SVs from bam files using the software you choose. Input should be sorted bam""")
+    parent_parser.add_argument('--svanna', dest="sv_anna_mode", action='store_true', help="""This command will annote the SVs using svanna""")
+    parent_parser.add_argument('--mobile_element_detection_mode', dest="mobile_element_detection_mode", action='store_true', help="""This command will detecte Mobile Elements from bam files using tldr""")
+    parent_parser.add_argument('--WGSstr', dest="str_detection_mode", action='store_true', help="""This command will detecte whole genome Tandom Repeats from bam files using straglr""")
+    parent_parser.add_argument('--str', dest="str_partial_detection_mode", action='store_true', help="""This command will detecte Tandom Repeats from bam files using straglr""")
+
+    args = parent_parser.parse_args()
+	#if no argument print help.
+    if len(sys.argv) == 1:
+         parser.print_help(sys.stderr)
+         sys.exit(1)
+    if args.all_mode==1:
+        args.align_mode = 2
+        args.snv_detection_mode = 2
+        sv_detection_mode = 2
+        args.sv_anna_mode = 2
+        args.str_detection_mode = 2
+        args.pandepth = 2
+        args.mobile_element_detection_mode=2
+    #Alignment
+    if args.align_mode == 1:
+        cmd2 = ['docker', 'run', '-it', '-m', '512g','-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/minimap2/minimap2', '-ax', 'map-ont', '--secondary=no', '--MD', '-t', '{}'.format(args.thread),'/opt/refdir/{}'.format(args.ref),'/opt/input/{}'.format(args.sample), '-o','/opt/outdir/sample_minimap_aligned.sam']
+        print(cmd2)
+        cmd3 = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), 'chuhongyuan/summer', '/opt/conda/bin/samtools', 'view', '-@', '{}'.format(args.thread), '-b','/opt/input/sample_minimap_aligned.sam', '-o', '/opt/outdir/sample_alignment.bam']
+        print(cmd3)     
+        result2=subprocess.run(cmd2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)              
+        result3=subprocess.run(cmd3, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        with open('{}/{}_minimap'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result2.stdout)  
+        with open('{}/{}_samtools'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result3.stdout)  
+        if result2.stderr or result3.stderr:  
+            with open('{}/error.log_minimap'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result2.stderr)  
+            with open('{}/error.log_samtools'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result3.stderr) 
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir),'chuhongyuan/summer', '/opt/conda/bin/samtools', 'sort', '-@', '{}'.format(args.thread), '/opt/outdir/sample_alignment.bam', '-o', '/opt/outdir/sample_align_sorted.bam']
+        print(cmd)     
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), 'chuhongyuan/summer','/opt/conda/bin/samtools', 'index', '-@', '{}'.format(args.thread), '/opt/outdir/sample_align_sorted.bam']
+        print(cmd)     
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        print("****SUCCESS****")
+    #PanDepth
+    if args.pandepth == 1:
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/PanDepth/pandepth', '-i','/opt/input/{}'.format(args.sample),'-o','/opt/outdir/pandepth', '-t','{}'.format(args.thread)]
+        print(cmd)     
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr) 
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****SUCCESS****")
+    #SNV detection
+    if args.snv_detection_mode == 1:
+        cmd = ['docker', 'run','-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'clair3', '/opt/conda/envs/clair3/bin/run_clair3.sh', '--bam_fn=/opt/input/{}'.format(args.sample), '--ref_fn=/opt/refdir/{}'.format(args.ref),'-t', '{}'.format(args.thread),'--platform=ont','--model_path=/opt/conda/envs/clair3/bin/models/ont','--output=/opt/outdir']
+        print(cmd)
+    # using subprocess.run to run and capture output        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+    # write log  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr)  
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****SUCCESS****")
+    #SV detection or combination   
+    if args.sv_detection_mode == 1:
+        if args.caller == 'cutesv':
+            cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/conda/envs/cutesv/bin/cuteSV', '--max_cluster_bias_INS','100', '--diff_ratio_merging_INS', '0.3', '--max_cluster_bias_DEL' ,'100','--diff_ratio_merging_DEL', '0.3','--genotype','-q', '20','-r', '50','-L' ,'50000000','-t','{}'.format(args.thread), '-s', '2','/opt/input/{}'.format(args.sample), '/opt/refdir/{}'.format(args.ref), '/opt/outdir/cutesvout.vcf', 'opt/outdir']
+            print(cmd)        
+            result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+            with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+                f.write(result.stdout)  
+            if result.stderr:  
+                with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                    f_err.write(result.stderr)  
+                print(f"Error occurred. See error.log for details.")  
+                sys.exit(1) 
+            print("****SUCCESS****")        
+        elif args.caller == 'svim':
+                cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'svim', 'svim', 'alignment', '--min_sv_size','50', '/opt/outdir/svimoutput', '/opt/input/{}'.format(args.sample), '/opt/refdir/{}'.format(args.ref)]
+                print(cmd)        
+                result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+                with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+                    f.write(result.stdout)  
+                if result.stderr:  
+                    with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                        f_err.write(result.stderr)  
+                    print(f"Error occurred. See error.log for details.")  
+                    sys.exit(1) 
+                print("****SUCCESS****")
+        elif args.caller == 'combined':
+                cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/conda/envs/cutesv/bin/cuteSV', '--max_cluster_bias_INS','100', '--diff_ratio_merging_INS', '0.3', '--max_cluster_bias_DEL' ,'100','--diff_ratio_merging_DEL', '0.3','--genotype','-q', '20','-r', '50','-L' ,'50000000','-t','{}'.format(args.thread), '-s', '2','/opt/input/{}'.format(args.sample), '/opt/refdir/{}'.format(args.ref), '/opt/outdir/cutesvout.vcf', 'opt/outdir']
+                print(cmd)
+                subprocess.run(cmd)
+                cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'svim', 'svim', 'alignment', '--min_sv_size','50', '/opt/outdir/svimoutput', '/opt/input/{}'.format(args.sample), '/opt/refdir/{}'.format(args.ref)]
+                print(cmd)
+                subprocess.run(cmd)
+                cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'sniffles', 'sniffles', '--threads', '{}'.format(args.thread),'--input', '/opt/input/{}'.format(args.sample),'--vcf', '/opt/outdir/sample_sniffles2.vcf', '--reference','/opt/refdir/{}'.format(args.ref)]
+                print(cmd)
+                subprocess.run(cmd)                 
+                cmd = ['docker', 'run', '-it', '-v','{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'perl', '/opt/combiSV/combiSV2.2.pl', '-cutesv', '/opt/outdir/cutesvout.vcf', '-svim','/opt/outdir/svimoutput/signatures/all.vcf','-sniffles','/opt/outdir/sample_sniffles2.vcf','-o', '/opt/outdir/combisv.vcf']
+                print(cmd)
+                subprocess.run(cmd)                 
+                result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+                with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+                    f.write(result.stdout)  
+                if result.stderr:  
+                    with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                        f_err.write(result.stderr)  
+                    print(f"Error occurred. See error.log for details.")  
+                    sys.exit(1) 
+                print("****SUCCESS****")
+        else:
+                cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'sniffles', 'sniffles', '--threads', '{}'.format(args.thread),'--input', '/opt/input/{}'.format(args.sample),'--vcf', '/opt/outdir/sample_sniffles2.vcf', '--reference','/opt/refdir/{}'.format(args.ref)]
+                print(cmd)        
+                result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+                with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+                    f.write(result.stdout)  
+                if result.stderr:  
+                    with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                        f_err.write(result.stderr)  
+                    print(f"Error occurred. See error.log for details.")  
+                    sys.exit(1) 
+                print("****SUCCESS****")
+    #SV annotation
+    if args.sv_anna_mode == 1:
+        if args.hpo:
+            argshpo_addt = []
+            for item in args.hpo:
+                argshpo_addt.extend(['-t',item])
+            print(argshpo_addt)
+            cmd = ['docker', 'run','-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/jdk-17.0.9/bin/java','-jar', '/opt/svanna-cli-1.0.4/svanna-cli-1.0.4.jar', 'prioritize', '-d', '/opt/svanna-cli-1.0.4/svanna-data','--vcf','/opt/input/combisv.vcf','--out-dir', '/opt/outdir/svanna','--prefix','sample'] + argshpo_addt
+            print(cmd)
+        else:
+            print("Phenotype features are required for this step. Please add --hpo HP:XXX")
+            sys.exit(1) 
+    # using subprocess.run to run and capture output        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+    # write log  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr)  
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****SUCCESS****")
+    #STR detection
+    if args.str_detection_mode == 1:
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'straglr', 'python', '/opt/conda/envs/straglr/bin/straglr-genotype', '--loci','/opt/conda/envs/straglr/bin/straglr-master/repeat-annotation/hg38/merge.bed','--sample',args.sample,'--vcf','/opt/outdir/sample.vcf','--sex',args.sex, '/opt/input/{}'.format(args.sample),'/opt/refdir/{}'.format(args.ref)]
+        print(cmd)
+    # using subprocess.run to run and capture output        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+    # write log  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr)  
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****SUCCESS****")
+    if args.str_partial_detection_mode == 1:
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'straglr', 'python', '/opt/conda/envs/straglr/bin/straglr-genotype', '--loci','/opt/conda/envs/straglr/bin/straglr-master/repeat-annotation/hg38/clinical_repeats.bed','--sample','sample','--vcf','/opt/outdir/sample.vcf','--sex',args.sex, '/opt/input/{}'.format(args.sample),'/opt/refdir/{}'.format(args.ref)]
+        print(cmd)
+    # using subprocess.run to run and capture output        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+    # write log  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr)  
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****SUCCESS****")        
+    #Mobile elements
+    if args.mobile_element_detection_mode == 1:
+        cmd = ['docker', 'run','-it', '-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'tldr','/opt/tldr/tldr/tldr','-b', '/opt/input/{}'.format(args.sample), '-e', '/opt/tldr/ref/teref.ont.human.fa', '-r','/opt/refdir/{}'.format(args.ref),'-n','/opt/tldr/ref/nonref.collection.hg38.chr.bed.gz','-p','{}'.format(args.thread),'-o','/opt/outdir/tldr', '--color_consensus']
+        print(cmd)
+    # using subprocess.run to run and capture output        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+    # write log  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr)  
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****SUCCESS****")
+    #ALL ANALYSIS
+    
+	#Alignment
+    if args.align_mode == 2:
+        cmd2 = ['docker', 'run', '-it', '-m', '512g','-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/minimap2/minimap2', '-ax', 'map-ont', '--secondary=no', '--MD', '-t', '{}'.format(args.thread),'/opt/refdir/{}'.format(args.ref),'/opt/input/{}'.format(args.sample), '-o','/opt/outdir/sample_minimap_aligned.sam']
+        print(cmd2)
+        cmd3 = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), 'chuhongyuan/summer', '/opt/conda/bin/samtools', 'view', '-@', '{}'.format(args.thread), '-b','/opt/outdir/sample_minimap_aligned.sam', '-o', '/opt/outdir/sample_alignment.bam']
+        print(cmd3)     
+        result2=subprocess.run(cmd2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)              
+        result3=subprocess.run(cmd3, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        with open('{}/{}_minimap'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result2.stdout)  
+        with open('{}/{}_samtools'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result3.stdout)  
+        if result2.stderr or result3.stderr:  
+            with open('{}/error.log_minimap'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result2.stderr)  
+            with open('{}/error.log_samtools'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result3.stderr) 
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir),'chuhongyuan/summer', '/opt/conda/bin/samtools', 'sort', '-@', '{}'.format(args.thread), '/opt/outdir/sample_alignment.bam', '-o', '/opt/outdir/sample_align_sorted.bam']
+        print(cmd)     
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), 'chuhongyuan/summer','/opt/conda/bin/samtools', 'index', '-@', '{}'.format(args.thread), '/opt/outdir/sample_align_sorted.bam']
+        print(cmd)     
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        print("****Alignment SUCCESS****")
+    #PanDepth
+    if args.pandepth == 2:
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/PanDepth/pandepth', '-i','/opt/outdir/sample_align_sorted.bam','-o','/opt/outdir/pandepth', '-t','{}'.format(args.thread)]
+        print(cmd)     
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr) 
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****PanDepth SUCCESS****")
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/conda/envs/cutesv/bin/cuteSV', '--max_cluster_bias_INS','100', '--diff_ratio_merging_INS', '0.3', '--max_cluster_bias_DEL' ,'100','--diff_ratio_merging_DEL', '0.3','--genotype','-q', '20','-r', '50','-L' ,'50000000','-t','{}'.format(args.thread), '-s', '2','/opt/input/sample_align_sorted.bam', '/opt/refdir/{}'.format(args.ref), '/opt/outdir/cutesvout.vcf', 'opt/outdir']
+        print(cmd)        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True) 
+        print("****CuteSV SUCCESS****")        
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'svim', 'svim', 'alignment', '--min_sv_size','50', '/opt/outdir/svimoutput', '/opt/input/sample_align_sorted.bam', '/opt/refdir/{}'.format(args.ref)]
+        print(cmd)        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True) 
+        print("****Svim SUCCESS****")
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'sniffles', 'sniffles', '--threads', '{}'.format(args.thread),'--input', '/opt/input/sample_align_sorted.bam','--vcf', '/opt/outdir/sample_sniffles2.vcf', '--reference','/opt/refdir/{}'.format(args.ref)]
+        print(cmd)        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True) 
+        print("****Sniffles SUCCESS****")
+        cmd = ['docker', 'run', '-it', '-v','{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'perl', '/opt/combiSV/combiSV2.2.pl', '-cutesv', '/opt/outdir/cutesvout.vcf', '-svim','/opt/outdir/svimoutput/signatures/all.vcf','-sniffles','/opt/outdir/sample_sniffles2.vcf','-o', '/opt/outdir/combisv.vcf']
+        print(cmd)                
+        subprocess.run(cmd)                         
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)                 
+        print("****SV detection SUCCESS****")                     
+                
+    #SV annotation
+    if args.sv_anna_mode == 2:
+        if args.hpo:
+            argshpo_addt = []
+            for item in args.hpo:
+                argshpo_addt.extend(['-t',item])
+            print(argshpo_addt)
+            cmd = ['docker', 'run','-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/jdk-17.0.9/bin/java','-jar', '/opt/svanna-cli-1.0.4/svanna-cli-1.0.4.jar', 'prioritize', '-d', '/opt/svanna-cli-1.0.4/svanna-data','--vcf','/opt/input/combisv.vcf','--out-dir', '/opt/outdir/svanna','--prefix','sample'] + argshpo_addt
+            print(cmd)
+        else:
+            print("Phenotype features are required for this step. Please add --hpo HP:XXX")
+            sys.exit(1) 
+    # using subprocess.run to run and capture output        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+    # write log  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr)  
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****SUCCESS****")
+    #STR detection
+    if args.str_detection_mode == 2:
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'straglr', 'python', '/opt/conda/envs/straglr/bin/straglr-genotype', '--loci','/opt/conda/envs/straglr/bin/straglr-master/repeat-annotation/hg38/merge.bed','--sample','sample','--vcf','/opt/outdir/sample.vcf','--sex',args.sex, '/opt/input/sample_align_sorted.bam','/opt/refdir/{}'.format(args.ref)]
+        print(cmd)
+    # using subprocess.run to run and capture output        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+    # write log  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr)  
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****STR detection SUCCESS****")
+    if args.str_partial_detection_mode == 2:
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'straglr', 'python', '/opt/conda/envs/straglr/bin/straglr-genotype', '--loci','/opt/conda/envs/straglr/bin/straglr-master/repeat-annotation/hg38/clinical_repeats.bed','--sample','sample','--vcf','/opt/outdir/sample.vcf','--sex',args.sex, '/opt/input/sample_align_sorted.bam','/opt/refdir/{}'.format(args.ref)]
+        print(cmd)
+    # using subprocess.run to run and capture output        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+    # write log  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr)  
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****STR detection SUCCESS****")        
+    #Mobile elements
+    if args.mobile_element_detection_mode == 2:
+        cmd = ['docker', 'run','-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'tldr','/opt/tldr/tldr/tldr','-b', '/opt/input/sample_align_sorted.bam', '-e', '/opt/tldr/ref/teref.ont.human.fa', '-r','/opt/refdir/{}'.format(args.ref),'-n','/opt/tldr/ref/nonref.collection.hg38.chr.bed.gz','-p','{}'.format(args.thread),'-o','/opt/outdir/tldr', '--color_consensus']
+        print(cmd)
+    # using subprocess.run to run and capture output        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+    # write log  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr)  
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****Transport Element detection SUCCESS****")
+    #SNV detection
+    if args.snv_detection_mode == 2:
+        cmd = ['docker', 'run','-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'clair3', '/opt/conda/envs/clair3/bin/run_clair3.sh', '--bam_fn=/opt/input/sample_align_sorted.bam', '--ref_fn=/opt/refdir/{}'.format(args.ref),'-t', '{}'.format(args.thread),'--platform=ont','--model_path=/opt/conda/envs/clair3/bin/models/ont','--output=/opt/outdir']
+        print(cmd)
+    # using subprocess.run to run and capture output        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+    # write log  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr)  
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****SNV detection SUCCESS****")   
+
+#check input and output
+#    cmd = ['echo', 'input:', args.outdir]
+#    subprocess.run(cmd, check=True)
+#    cmd = ['echo', 'output', args.input]
+#    subprocess.run(cmd, check=True)
+#check hpo    
+#    print("HPO phenotypes specified:", args.hpo) 
+get_args()
