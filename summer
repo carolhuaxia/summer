@@ -42,7 +42,7 @@ def get_args():
     parent_parser.add_argument('--mobile_element_detection_mode', dest="mobile_element_detection_mode", action='store_true', help="""This command will detecte Mobile Elements from bam files using tldr""")
     parent_parser.add_argument('--WGSstr', dest="str_detection_mode", action='store_true', help="""This command will detecte whole genome Tandom Repeats from bam files using straglr""")
     parent_parser.add_argument('--str', dest="str_partial_detection_mode", action='store_true', help="""This command will detecte Tandom Repeats from bam files using straglr""")
-
+    parent_parser.add_argument('--Ensemblestr', dest="str_Ensemble_detection_mode", action='store_true', help="""This command will detecte Deep Tandom Repeats from bam files using straglr, whether known or unknown to be clinical important""")
     args = parent_parser.parse_args()
 	#if no argument print help.
     if len(sys.argv) == 1:
@@ -378,7 +378,20 @@ def get_args():
             print(f"Error occurred. See error.log for details.")  
             sys.exit(1) 
         print("****SNV detection SUCCESS****")   
-
+    if args.str_Ensemble_detection_mode == 1:
+        cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'straglr', 'python', '/opt/conda/envs/straglr/bin/straglr-genotype', '--loci','/opt/conda/envs/straglr/bin/straglr-master/repeat-annotation/hg38/TRtab.bed','--sample','sample','--vcf','/opt/outdir/sample.vcf','--sex',args.sex, '/opt/input/sample_align_sorted.bam','/opt/refdir/{}'.format(args.ref)]
+        print(cmd)
+    # using subprocess.run to run and capture output        
+        result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+    # write log  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write(result.stdout)  
+        if result.stderr:  
+            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+                f_err.write(result.stderr)  
+            print(f"Error occurred. See error.log for details.")  
+            sys.exit(1) 
+        print("****STR deep detection SUCCESS****")
 #check input and output
 #    cmd = ['echo', 'input:', args.outdir]
 #    subprocess.run(cmd, check=True)
