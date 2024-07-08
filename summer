@@ -290,7 +290,7 @@ def get_args():
         print(cmd)        
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True) 
         print("****Sniffles SUCCESS****")
-        cmd = ['docker', 'run', '-it', '-v','{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'perl', '/opt/combiSV/combiSV2.2.pl', '-cutesv', '/opt/outdir/cutesvout.vcf', '-svim','/opt/outdir/svimoutput/signatures/all.vcf','-sniffles','/opt/outdir/sample_sniffles2.vcf','-o', '/opt/outdir/combisv.vcf']
+        cmd = ['docker', 'run', '-it', '-v','{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'perl', '/opt/combiSV/combiSV2.2.pl', '-cutesv', '/opt/outdir/cutesvout.vcf', '-svim','/opt/outdir/svimoutput/variants.vcf','-sniffles','/opt/outdir/sample_sniffles2.vcf','-o', '/opt/outdir/combisv.vcf']
         print(cmd)                
         subprocess.run(cmd)                         
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)                 
