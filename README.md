@@ -1,5 +1,8 @@
 # **SUMMER**
-![SUMMER Pipeline Workflow](https://github.com/carolhuaxia/summer/blob/main/SUMMER-10-9-2024.png)
+<div align="center">
+  <img src="https://github.com/carolhuaxia/summer/blob/main/SUMMER-Title.png" alt="SUMMER Pipeline Workflow" width="500 length="800" height="200">
+</div>
+
 **SUMMER** is an integrated pipeline for clinical variation detection via nanopore sequencing raw reads. It strongly simplifies the process of detecting and annotating possible pathogenic structural variations, mobile elements, etc.
 
 ## **Overview**
