@@ -53,7 +53,7 @@ For example:
 ```bash
 summer --align -i /data/project/ -s sample.fastq -o /data/output/ -rd /data/refseqdir -r hg38.fa -x male
 ```
-You may also able to enter a container in an interactive way :
+You may also able to enter a container in an interactive way (to view your intermediate files, to download them,etc) :
 ```bash
 docker run -it chuhongyuan/summer:latest
 ```
