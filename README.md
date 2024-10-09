@@ -37,4 +37,4 @@ All software is integrated within a Docker container for portability and reprodu
 docker pull chuhongyuan/summer:latest
 ```
 
-Details can be seen in the **full documentation**
+Details can be seen in the **official documentation** above
