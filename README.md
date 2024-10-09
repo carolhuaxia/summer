@@ -17,7 +17,7 @@ All the tools integrated in **SUMMER** are encapsulated in a Docker container, a
 - **Tandem Repeat Detection**: Detect tandem repeats using **straglr**.
 - **Customizable**: Users can sperate each step of **SUMMER** to meet specific needs using Docker.
 
-## **Installation and Usage**
+## **Complete User Guide**
 For full instructions on how to install and use **SUMMER**, please refer to the [official documentation](https://pku-edu.gitbook.io/summer-pipeline-for-long-read-sequencing/).
 
 ## **Pipeline Workflow**
@@ -30,11 +30,30 @@ The pipeline consists of several key stages, each designed to handle specific ta
 3. **Variation Detection**: Identifying structural variations, mobile elements, and mutations.
 4. **Annotation**: Annotating the detected variations to provide clinical insights.
 
-## **Docker Integration**
-All software is integrated within a Docker container for portability and reproducibility. To get started, pull the container using the following command:
+## **Quick Start**
+Detail usage can be seen in the **official documentation** above
 
+To get started, pull the container using the following command:
 ```bash
+# docker pull the preinstalled and precompiled software
 docker pull chuhongyuan/summer:latest
-```
 
-Details can be seen in the **official documentation** above
+# download SUMMER workflow from github
+download SUMMER at https://github.com/carolhuaxia/summer
+chmod +x PATH_TO_SUMMER/summer
+
+# get help (you can view full help page in **official documentation** above)
+python PATH_TO_SUMMER/summer -h
+```
+Basic usage:
+```bash
+summer --MODE -i <INPUTDIR> -s <SAMPLEFILE> -o <OUTDIR> -rd <REFDIR> -r <REFFILE> -x {male,female}
+```
+For example:
+```bash
+summer --align -i /data/project/ -s sample.fastq -o /data/output/ -rd /data/refseqdir -r hg38.fa -x male
+```
+You may also able to enter a container in an interactive way :
+```bash
+docker run -it chuhongyuan/summer:latest
+```
