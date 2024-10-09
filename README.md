@@ -34,4 +34,4 @@ The pipeline consists of several key stages, each designed to handle specific ta
 All software is integrated within a Docker container for portability and reproducibility. To get started, pull the container using the following command:
 
 ```bash
-docker pull summer_pipeline:latest
+docker pull chuhongyuan/summer:latest 
