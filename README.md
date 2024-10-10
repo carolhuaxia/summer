@@ -1,4 +1,5 @@
 # **SUMMER**
+[![Run with Docker](https://img.shields.io/badge/Run%20with-Docker-blue?logo=docker)](https://www.docker.com/) ![Bioinformatics Pipeline](https://img.shields.io/badge/Bioinformatics-Analysis%20Pipeline-brightgreen) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 <div align="center">
   <img src="https://github.com/carolhuaxia/summer/blob/main/SUMMER-Title.png" alt="SUMMER Pipeline Workflow" width="500 length="800" height="200">
 </div>
