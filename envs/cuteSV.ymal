@@ -1,0 +1,15 @@
+name: bioenv
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3
+  - scipy
+  - pysam
+  - biopython
+  - cigar
+  - numpy
+  - pyvcf3
+  - scikit-learn
+  - cuteSV
