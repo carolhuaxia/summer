@@ -1,0 +1,18 @@
+name: sniffles2
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - scipy
+  - pysam=0.21.0
+  - biopython
+  - cigar
+  - numpy
+  - pyvcf3
+  - scikit-learn
+  - cuteSV
+  - sniffles=2.4
+  - edlib=1.3.9
+  - psutil>=5.9.4
