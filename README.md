@@ -58,3 +58,60 @@ You may also able to enter a container in an interactive way (to view your inter
 ```bash
 docker run -it chuhongyuan/summer:latest
 ```
+
+
+Or How to use SUMMER on hpc using singularity?
+
+#To run summer singularity on hpc
+```bash
+#module avial #check avialable singularity version
+#First check your avaiable version of singularity on hpc and module load
+module load singularity/{your_hpc_version}
+#pull summer image from online:
+singularity pull summer.sif docker://chuhongyuan/summer:latest
+#Minimap alignment
+singularity run {summersifdir}/summer.sif /opt/minimap2/minimap2 -ax map-ont --secondary=no --MD -t {number of thread} {refdir/refseq} {inputdir/inputfq.gz} -o {outputdir/output.sam}
+#samtools sort and index
+singularity run {summersifdir}/summer.sif opt/conda/bin/samtools view -@ {number of thread} -b {inputdir/input.sam} -o {outdir/output.bam}
+singularity run {summersifdir}/summer.sif /opt/conda/bin/samtools sort -@ {number of thread} {inputdir/output.bam} -o {outdir/output_sorted.bam}
+singularity run {summersifdir}/summer.sif /opt/conda/bin/samtools index -@ {number of thread} {inputdir/input_sorted.bam}
+#pandepth
+singularity run {summersifdir}/summer.sif /opt/PanDepth/pandepth -i {inputdir/input_sorted.bam} -o {outdir} -t {number of thread}
+#call SVs
+singularity run {summersifdir}/summer.sif /opt/conda/envs/cutesv/bin/cuteSV --max_cluster_bias_INS 100 --diff_ratio_merging_INS 0.3 --max_cluster_bias_DEL 100 --diff_ratio_merging_DEL 0.3 --genotype -q 20 -r 50 -L 50000000 -t {number of thread} -s 2 {inputdir/input_sorted.bam} {refdir/refseq} {outdir} {workdir}
+singularity run {summersifdir}/summer.sif conda run -n svim svim alignment --min_sv_size 50 {outdir} {inputdir/input_sorted.bam} {refdir/refseq}
+singularity run {summersifdir}/summer.sif conda run -n sniffles sniffles --threads {number of thread} --input {inputdir/input_sorted.bam} --vcf {outdir/sample_sniffles2.vcf} --reference {refdir/refseq}
+#combisv
+singularity run {summersifdir}/summer.sif perl /opt/combiSV/combiSV2.2.pl -cutesv {cutesvvcfdir/cutesvout.vcf} -svim {svimvcfdir/signatures/all.vcf} -sniffles {snifflesvcfdir/sample_sniffles2.vcf} -o {outdir/combisv.vcf}
+#call STRs using straglr
+singularity run {summersifdir}/summer.sif conda run -n straglr python /opt/conda/envs/straglr/bin/straglr-genotype --loci /opt/conda/envs/straglr/bin/straglr-master/repeat-annotation/hg38/merge.bed --sample sample --vcf {outdir/outdir.vcf} --sex {male OR female} {inputdir/input_sorted.bam} {refdir/refseq}
+#call MEIs using tldr
+singularity run {summersifdir}/summer.sif conda run -n tldr /opt/tldr/tldr/tldr -b {inputdir/input_sorted.bam} -e /opt/tldr/ref/teref.ont.human.fa -r {refdir/refseq} -n /opt/tldr/ref/nonref.collection.hg38.chr.bed.gz -p {number of thread} -o {outdir} --color_consensus
+#call SNVs using clair3
+singularity run {summersifdir}/summer.sif conda run -n clair3 /opt/conda/envs/clair3/bin/run
+```
+
+An additional handy snakemake is provided for SV calling from bam file:
+
+0, Prepare environments
+```bash
+conda create -n svim_env --channel bioconda svim
+conda install sniffles=2.5.3
+conda install -c bioconda cutesv
+```
+1, Modify the config.yml file
+```bash
+#Folder where all the outputs are saved
+BASE_OUTPUT_DIR: example_outputdir
+#Modify: example_outputdir to your output directionary
+#Folder where input bam and index file are saved and filename
+BASE_INPUT_DIR: example_inputdir/input.bam
+#Folder where reference file saved and filename
+BASE_REF_DIR: example_refdir/GRch38.fa
+#Parameter for analysis
+THREADS: number of threads ###note that SVIM could not run on multi-threading
+```
+2, Run the process
+```bash
+snakemake -s work_flow.snakefile --configfile config.yml
+```
