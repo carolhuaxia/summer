@@ -60,8 +60,8 @@ docker run -it chuhongyuan/summer:latest
 ```
 
 
+# Other ways to run summer
 Or How to use SUMMER on hpc using singularity?
-
 #To run summer singularity on hpc
 ```bash
 #module avial #check avialable singularity version
