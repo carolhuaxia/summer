@@ -1,0 +1,8 @@
+# Folder where all the outputs are saved
+BASE_OUTPUT_DIR: /data/chuhy/project/snakemakeresult
+# Folder where input bam and index file are saved and filename
+BASE_INPUT_DIR: /data/chuhy/project/summer_Hg002/sample_align_sorted.bam
+# Folder where reference file saved and filename
+BASE_REF_DIR: /data/renqgli/project/refseq/hg38.p14.fa
+# Parameter for analysis
+THREADS: 11

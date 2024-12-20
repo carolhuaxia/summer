@@ -1,0 +1,8 @@
+# Folder where all the outputs are saved
+BASE_OUTPUT_DIR: example_outputdir
+# Folder where input bam and index file are saved and filename
+BASE_INPUT_DIR: example_inputdir/input.bam
+# Folder where reference file saved and filename
+BASE_REF_DIR: example_refdir/GRch38.fa
+# Parameter for analysis
+THREADS: number of threads ###note that SVIM could not run on multi-threading
