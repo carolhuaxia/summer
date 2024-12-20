@@ -8,7 +8,7 @@ from collections import namedtuple
 import logging
 import filecmp
 from typing import Any
-
+import time
 # Create a custom logger
 #logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
@@ -241,6 +241,7 @@ def get_args():
     
 	#Alignment
     if args.align_mode == 2:
+        start_time = time.time()
         cmd2 = ['docker', 'run', '-it', '-m', '512g','-v', '{}:/opt/input'.format(args.input), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/minimap2/minimap2', '-ax', 'map-ont', '--secondary=no', '--MD', '-t', '{}'.format(args.thread),'/opt/refdir/{}'.format(args.ref),'/opt/input/{}'.format(args.sample), '-o','/opt/outdir/sample_minimap_aligned.sam']
         print(cmd2)
         cmd3 = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), 'chuhongyuan/summer', '/opt/conda/bin/samtools', 'view', '-@', '{}'.format(args.thread), '-b','/opt/outdir/sample_minimap_aligned.sam', '-o', '/opt/outdir/sample_alignment.bam']
@@ -265,36 +266,54 @@ def get_args():
         print(cmd)     
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
         print("****Alignment SUCCESS****")
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        with open('{}/{}_report'.format(args.outdir,args.log_file), 'w') as f:  
+            f.write("****Alignment SUCCESS****, result: {}/sample_align_sorted.bam".format(args.outdir))  
+            f.write("\n Elapsed: {:.6f} seconds\n".format(elapsed_time))
     #PanDepth
     if args.pandepth == 2:
         cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/PanDepth/pandepth', '-i','/opt/outdir/sample_align_sorted.bam','-o','/opt/outdir/pandepth', '-t','{}'.format(args.thread)]
         print(cmd)     
+        start_time = time.time()
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
-        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'a') as f:  
             f.write(result.stdout)  
         if result.stderr:  
-            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+            with open('{}/error.log'.format(args.outdir), 'a') as f_err:  
                 f_err.write(result.stderr) 
             print(f"Error occurred. See error.log for details.")  
             sys.exit(1) 
         print("****PanDepth SUCCESS****")
+        with open('{}/{}_report'.format(args.outdir,args.log_file), 'a') as f:  
+            f.write("****PanDepth SUCCESS****, result: {}/pandepth.chr.stat.gz".format(args.outdir))  
         cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', '/opt/conda/envs/cutesv/bin/cuteSV', '--max_cluster_bias_INS','100', '--diff_ratio_merging_INS', '0.3', '--max_cluster_bias_DEL' ,'100','--diff_ratio_merging_DEL', '0.3','--genotype','-q', '20','-r', '50','-L' ,'50000000','-t','{}'.format(args.thread), '-s', '2','/opt/input/sample_align_sorted.bam', '/opt/refdir/{}'.format(args.ref), '/opt/outdir/cutesvout.vcf', 'opt/outdir']
         print(cmd)        
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True) 
-        print("****CuteSV SUCCESS****")        
+        print("****CuteSV SUCCESS****")   
+        with open('{}/{}_report'.format(args.outdir,args.log_file), 'a') as f:  
+            f.write("\n****CuteSV SUCCESS****, result: {}/cutesvout.vcf".format(args.outdir))         
         cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'svim', 'svim', 'alignment', '--min_sv_size','50', '/opt/outdir/svimoutput', '/opt/input/sample_align_sorted.bam', '/opt/refdir/{}'.format(args.ref)]
         print(cmd)        
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True) 
         print("****Svim SUCCESS****")
+        with open('{}/{}_report'.format(args.outdir,args.log_file), 'a') as f:  
+            f.write("\n****Svim SUCCESS****, result: {}/svimoutput".format(args.outdir))  
         cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'sniffles', 'sniffles', '--threads', '{}'.format(args.thread),'--input', '/opt/input/sample_align_sorted.bam','--vcf', '/opt/outdir/sample_sniffles2.vcf', '--reference','/opt/refdir/{}'.format(args.ref)]
         print(cmd)        
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True) 
         print("****Sniffles SUCCESS****")
+        with open('{}/{}_report'.format(args.outdir,args.log_file), 'a') as f:  
+            f.write("\n****Sniffles SUCCESS****, result: {}/sample_sniffles2.vcf".format(args.outdir)) 
         cmd = ['docker', 'run', '-it', '-v','{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'perl', '/opt/combiSV/combiSV2.2.pl', '-cutesv', '/opt/outdir/cutesvout.vcf', '-svim','/opt/outdir/svimoutput/variants.vcf','-sniffles','/opt/outdir/sample_sniffles2.vcf','-o', '/opt/outdir/combisv.vcf']
         print(cmd)                
         subprocess.run(cmd)                         
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)                 
-        print("****SV detection SUCCESS****")                     
+        print("****SV detection SUCCESS****")
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        with open('{}/{}_report'.format(args.outdir,args.log_file), 'a') as f:  
+            f.write("\nSV detection Elapsed: {:.6f} seconds\n".format(elapsed_time))
                 
     #SV annotation
     if args.sv_anna_mode == 2:
@@ -311,14 +330,16 @@ def get_args():
     # using subprocess.run to run and capture output        
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
     # write log  
-        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'a') as f:  
             f.write(result.stdout)  
         if result.stderr:  
-            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+            with open('{}/error.log'.format(args.outdir), 'a') as f_err:  
                 f_err.write(result.stderr)  
             print(f"Error occurred. See error.log for details.")  
             sys.exit(1) 
         print("****SUCCESS****")
+        with open('{}/{}_report'.format(args.outdir,args.log_file), 'a') as f:  
+            f.write("\n****SV Annotation SUCCESS****")
     #STR detection
     if args.str_detection_mode == 2:
         cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'straglr', 'python', '/opt/conda/envs/straglr/bin/straglr-genotype', '--loci','/opt/conda/envs/straglr/bin/straglr-master/repeat-annotation/hg38/merge.bed','--sample','sample','--vcf','/opt/outdir/sample.vcf','--sex',args.sex, '/opt/input/sample_align_sorted.bam','/opt/refdir/{}'.format(args.ref)]
@@ -326,10 +347,10 @@ def get_args():
     # using subprocess.run to run and capture output        
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
     # write log  
-        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'a') as f:  
             f.write(result.stdout)  
         if result.stderr:  
-            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+            with open('{}/error.log'.format(args.outdir), 'a') as f_err:  
                 f_err.write(result.stderr)  
             print(f"Error occurred. See error.log for details.")  
             sys.exit(1) 
@@ -340,44 +361,56 @@ def get_args():
     # using subprocess.run to run and capture output        
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
     # write log  
-        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'a') as f:  
             f.write(result.stdout)  
         if result.stderr:  
-            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+            with open('{}/error.log'.format(args.outdir), 'a') as f_err:  
                 f_err.write(result.stderr)  
             print(f"Error occurred. See error.log for details.")  
             sys.exit(1) 
-        print("****STR detection SUCCESS****")        
+        print("****STR detection SUCCESS****") 
+        with open('{}/{}_report'.format(args.outdir,args.log_file), 'a') as f:   
+            f.write("\n****STR SUCCESS****, result: {}/sample.vcf".format(args.outdir))        
     #Mobile elements
     if args.mobile_element_detection_mode == 2:
         cmd = ['docker', 'run','-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'tldr','/opt/tldr/tldr/tldr','-b', '/opt/input/sample_align_sorted.bam', '-e', '/opt/tldr/ref/teref.ont.human.fa', '-r','/opt/refdir/{}'.format(args.ref),'-n','/opt/tldr/ref/nonref.collection.hg38.chr.bed.gz','-p','{}'.format(args.thread),'-o','/opt/outdir/tldr', '--color_consensus']
         print(cmd)
+        start_time = time.time()
     # using subprocess.run to run and capture output        
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
     # write log  
-        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'a') as f:  
             f.write(result.stdout)  
         if result.stderr:  
-            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+            with open('{}/error.log'.format(args.outdir), 'a') as f_err:  
                 f_err.write(result.stderr)  
             print(f"Error occurred. See error.log for details.")  
             sys.exit(1) 
         print("****Transport Element detection SUCCESS****")
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        with open('{}/{}_report'.format(args.outdir,args.log_file), 'a') as f:   
+            f.write("\nMEI detection Elapsed: {:.6f} seconds\n".format(elapsed_time))
     #SNV detection
     if args.snv_detection_mode == 2:
         cmd = ['docker', 'run','-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'clair3', '/opt/conda/envs/clair3/bin/run_clair3.sh', '--bam_fn=/opt/input/sample_align_sorted.bam', '--ref_fn=/opt/refdir/{}'.format(args.ref),'-t', '{}'.format(args.thread),'--platform=ont','--model_path=/opt/conda/envs/clair3/bin/models/ont','--output=/opt/outdir']
         print(cmd)
+        start_time = time.time()
     # using subprocess.run to run and capture output        
         result=subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
     # write log  
-        with open('{}/{}'.format(args.outdir,args.log_file), 'w') as f:  
+        with open('{}/{}'.format(args.outdir,args.log_file), 'a') as f:  
             f.write(result.stdout)  
         if result.stderr:  
-            with open('{}/error.log'.format(args.outdir), 'w') as f_err:  
+            with open('{}/error.log'.format(args.outdir), 'a') as f_err:  
                 f_err.write(result.stderr)  
             print(f"Error occurred. See error.log for details.")  
             sys.exit(1) 
-        print("****SNV detection SUCCESS****")   
+        print("****SNV detection SUCCESS****")
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        with open('{}/{}_report'.format(args.outdir,args.log_file), 'a') as f:   
+            f.write("\nSNV detection Elapsed: {:.6f} seconds\n".format(elapsed_time))        
     if args.str_Ensemble_detection_mode == 1:
         cmd = ['docker', 'run', '-it', '-v', '{}:/opt/input'.format(args.outdir), '-v', '{}:/opt/outdir'.format(args.outdir), '-v', '{}:/opt/refdir'.format(args.refdir), 'chuhongyuan/summer', 'conda','run', '-n', 'straglr', 'python', '/opt/conda/envs/straglr/bin/straglr-genotype', '--loci','/opt/conda/envs/straglr/bin/straglr-master/repeat-annotation/hg38/TRtab.bed','--sample','sample','--vcf','/opt/outdir/sample.vcf','--sex',args.sex, '/opt/input/sample_align_sorted.bam','/opt/refdir/{}'.format(args.ref)]
         print(cmd)
