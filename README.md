@@ -60,8 +60,8 @@ docker run -it chuhongyuan/summer:latest
 ```
 
 
-# Run SUMMER with Singularity
-# If you are using hpc or without root permissions, Singularity deployments are more suited 
+# Singularity and SnakeMake
+### If you are using hpc or without root permissions, Singularity deployments are more suited 
 ```bash
 #pull summer image from online:
 singularity pull summer.sif docker://chuhongyuan/summer:latest
