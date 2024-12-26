@@ -60,13 +60,9 @@ docker run -it chuhongyuan/summer:latest
 ```
 
 
-# Other ways to run summer
-Or How to use SUMMER on hpc using singularity?
-#To run summer singularity on hpc
+# Run SUMMER with Singularity
+# If you are using hpc or without root permissions, Singularity deployments are more suited 
 ```bash
-#module avial #check avialable singularity version
-#First check your avaiable version of singularity on hpc and module load
-module load singularity/{your_hpc_version}
 #pull summer image from online:
 singularity pull summer.sif docker://chuhongyuan/summer:latest
 #Minimap alignment
