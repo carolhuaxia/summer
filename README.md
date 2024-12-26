@@ -32,7 +32,7 @@ The pipeline consists of several key stages, each designed to handle specific ta
 4. **Annotation**: Annotating the detected variations to provide clinical insights.
 
 ## **Quick Start**
-Detail usage can be seen in the **official documentation** above
+Detail usage can be seen in the [full official documentation](https://pku-edu.gitbook.io/summer-pipeline-for-long-read-sequencing/)
 
 To get started, pull the container using the following command:
 ```bash
@@ -87,7 +87,7 @@ singularity run {summersifdir}/summer.sif conda run -n tldr /opt/tldr/tldr/tldr 
 singularity run {summersifdir}/summer.sif conda run -n clair3 /opt/conda/envs/clair3/bin/run
 ```
 
-An additional handy snakemake is provided for SV calling from bam file:
+An additional handy SnakeMake is provided for SV calling from bam file:
 
 0, Prepare environments
 ```bash
@@ -105,7 +105,7 @@ BASE_INPUT_DIR: example_inputdir/input.bam
 #Folder where reference file saved and filename
 BASE_REF_DIR: example_refdir/GRch38.fa
 #Parameter for analysis
-THREADS: number of threads ###note that SVIM could not run on multi-threading
+THREADS: number of threads ### SVIM could not run on multi-threading
 ```
 2, Run the process
 ```bash
