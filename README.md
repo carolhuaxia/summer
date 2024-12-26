@@ -18,9 +18,6 @@ All the tools integrated in **SUMMER** are encapsulated in a Docker container, a
 - **Tandem Repeat Detection**: Detect tandem repeats using **straglr**.
 - **Customizable**: Users can sperate each step of **SUMMER** to meet specific needs using Docker.
 
-## **Complete User Guide**
-For full instructions on how to install and use **SUMMER**, please refer to the [official documentation](https://pku-edu.gitbook.io/summer-pipeline-for-long-read-sequencing/).
-
 ## **Pipeline Workflow**
 ![Pipeline Interface](https://github.com/carolhuaxia/summer/assets/54387977/81f5db90-176c-4d6a-a81d-7690a9f292f5)
 
